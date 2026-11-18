@@ -1,0 +1,49 @@
+# CI/CD for the ShopStream bundle (Module 07).
+# PRs: run unit tests + validate the bundle.  main: deploy to prod.
+# Repo secrets needed: DATABRICKS_HOST, DATABRICKS_TOKEN (better: a service principal with OAuth,
+# DATABRICKS_CLIENT_ID / DATABRICKS_CLIENT_SECRET).
+name: shopstream-ci-cd
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q
+
+  validate:
+    needs: test
+    runs-on: ubuntu-latest
+    if: ${{ vars.DATABRICKS_CONFIGURED == 'true' }}   # set this repo variable once secrets exist
+    defaults: { run: { working-directory: 07_jobs_and_bundles } }
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - run: databricks bundle validate -t prod
+
+  deploy-prod:
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: prod            # add required reviewers on this GitHub environment for a manual approval step
+    defaults: { run: { working-directory: 07_jobs_and_bundles } }
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - run: databricks bundle deploy -t prod

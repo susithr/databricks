@@ -1,0 +1,44 @@
+# Databricks Asset Bundle: ShopStream as code.
+#   databricks bundle validate            # check the config
+#   databricks bundle deploy -t dev       # upload code + create/update the job in your workspace
+#   databricks bundle run shopstream_daily -t dev
+#   databricks bundle destroy -t dev      # remove everything the bundle created
+bundle:
+  name: shopstream
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog to write to
+    default: workspace
+  schema:
+    description: Schema for this environment
+    default: shopstream_dev
+  dq_max_bad_pct:
+    description: Fail the run if more than this % of new orders are quarantined
+    default: "10"
+
+targets:
+  dev:
+    # development mode: resources are prefixed with "[dev your_name]", schedules are paused,
+    # and each developer gets their own copy, so you can't break each other's work
+    mode: development
+    default: true
+    workspace:
+      host: https://<your-workspace>.cloud.databricks.com   # <- change me (or set DATABRICKS_HOST)
+
+  prod:
+    mode: production
+    workspace:
+      host: https://<your-workspace>.cloud.databricks.com   # <- change me
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      schema: shopstream_prod
+    # In a real company prod runs as a service principal, not a person:
+    # run_as:
+    #   service_principal_name: "00000000-0000-0000-0000-000000000000"
+    permissions:
+      - group_name: users
+        level: CAN_VIEW
